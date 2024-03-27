@@ -55,8 +55,7 @@ def labels_to_dict(all_labels:dict):
 
     return labels_name_id
 
-def add_agents(headers:dict, labels_to_agents:dict ,account_group:str="ProServ Enablement"):
-
+def add_agents(headers:dict, labels_to_agents:dict , account_group:str= "ProServ Enablement"):
     
     agent = {}
 
@@ -84,33 +83,51 @@ def add_agents(headers:dict, labels_to_agents:dict ,account_group:str="ProServ E
 
     labels_name_id = labels_to_dict(all_labels)
 
+
     #iterar en el diccionario de labels_to_agents y armar una lista de agent ids por cada agente
     for label, agents in labels_to_agents.items():
         
-        agentsIds = []
+        if label in labels_name_id:
+            old_agentIds = []
 
-        for agent in agents:
+            label_details_url = "https://api.thousandeyes.com/v6/groups/endpoint-agents/%s.json" % (labels_name_id[label])
+            _,label_details = get_data(headers=headers, endp_url=label_details_url, params={"aid": aid})
 
-            if agent in agents_name_id:
-                agentsIds.append({"agentId" :agents_name_id[agent]})
-            else:
-                print(f'This agent does not exists')
+            if len(label_details["groups"][0]["endpointAgents"]) > 0:
+                for agent in label_details["groups"][0]["endpointAgents"]:
+                    old_agentIds.append({"agentId" :agent["agentId"]})
+
+            new_agentsIds = []
+
+            for agent in agents:
+
+                if agent in agents_name_id:
+                    new_agentsIds.append({"agentId" :agents_name_id[agent]})
+                else:
+                    print(f'This agent does not exists: {agent} in this account group: {account_group}')
+            
+
+            #Juntamos la lista de los viejos con los nuevos
+            agents = new_agentsIds +  old_agentIds
+
+            #que se haga update si la lista de endpointAgents está vacia?
+
+            #Ahora si agregamos los agentes a ese label
+            payload = json.dumps({
+                "name": label,
+                "endpointAgents": agents
+                })
+            
+            update_label_url = "https://api.thousandeyes.com/v6/groups/%s/update.json?aid=%s" % (labels_name_id[label], aid)
+            status_code,update = post_data(headers,update_label_url,payload)
         
+            if status_code != 200:
+                print("There was an issue with the agents please verify the list")
+            else: 
+                print(f"Agents added successfully to: {label}")
 
-        #Ahora si agregamos los agentes a ese label
-        payload = json.dumps({
-            "name": label,
-            "endpointAgents": agentsIds
-            })
-        
-        update_label_url = "https://api.thousandeyes.com/v6/groups/%s/update.json?aid=%s" % (labels_name_id[label], aid)
-        status_code,update = post_data(headers,update_label_url,payload)
-    
-        if status_code != 200:
-            print("There was an issue with the agents please verify the list")
-        else: 
-            print("All agents added successfully")
-
+        else:
+            print(f'This label does not exist in the account group {account_group}: {label}')
 
     return 0
 
@@ -144,8 +161,7 @@ if __name__ == "__main__":
 
     except KeyboardInterrupt:
         print("\nOperation cancelled by user.")
-    except Exception as e:
-        print(f"An unexpected error occurred: {str(e)}")
+
 
 
 
